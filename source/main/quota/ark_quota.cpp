@@ -20,6 +20,7 @@
 #include <string>
 
 #include "app_config.h"
+#include "../config/config_store.h"
 #include "esp_log.h"
 #include "esp_http_client.h"
 #include "esp_crt_bundle.h"
@@ -54,9 +55,9 @@ static void hmac_sha256(const unsigned char *key, size_t klen,
 }
 
 // ---------- V4 签名 ----------
-// 输入：X-Date（UTC，格式 YYYYMMDDThhmmssZ），body 哈希
+// 输入：X-Date（UTC，格式 YYYYMMDDThhmmssZ）、body 哈希、AK/SK（运行时配置）
 // 输出：Authorization 头的完整值
-static void v4_sign(const char *x_date, const char *body_hash, char auth[512])
+static void v4_sign(const char *ak, const char *sk, const char *x_date, const char *body_hash, char auth[512])
 {
     char datebuf[9];
     snprintf(datebuf, sizeof(datebuf), "%.8s", x_date);
@@ -88,7 +89,7 @@ static void v4_sign(const char *x_date, const char *body_hash, char auth[512])
 
     // 3) 密钥链：SK → 日期 → 区域 → 服务 → "request"
     unsigned char k1[32], k2[32], k3[32], k4[32];
-    hmac_sha256((const unsigned char *)APP_ARK_SK, strlen(APP_ARK_SK), datebuf, 8, k1);
+    hmac_sha256((const unsigned char *)sk, strlen(sk), datebuf, 8, k1);
     hmac_sha256(k1, 32, ARK_REGION, strlen(ARK_REGION), k2);
     hmac_sha256(k2, 32, ARK_SERVICE, strlen(ARK_SERVICE), k3);
     hmac_sha256(k3, 32, "request", 7, k4);
@@ -106,15 +107,18 @@ static void v4_sign(const char *x_date, const char *body_hash, char auth[512])
     snprintf(auth, 512,
              "HMAC-SHA256 Credential=%s/%.8s/%s/%s/request, "
              "SignedHeaders=content-type;host;x-content-sha256;x-date, Signature=%s",
-             APP_ARK_AK, datebuf, ARK_REGION, ARK_SERVICE, sig_hex);
+             ak, datebuf, ARK_REGION, ARK_SERVICE, sig_hex);
 }
 
 // ---------- HTTPS 请求 + 解析 ----------
 bool ark_quota_fetch(int remain[3])
 {
 #if APP_ARK_ENABLE
-    // 空密钥守卫：app_config.h 未填 AK 时静默跳过（模板固件保持兜底值，不打日志刷屏）
-    if (APP_ARK_AK[0] == '\0') return false;
+    // 空密钥守卫：配置里没填 AK 时静默跳过（模板固件保持兜底值，不打日志刷屏）
+    app_cfg_t cc;
+    cfg_get_copy(&cc);
+    if (cc.ark_ak[0] == '\0' || cc.ark_sk[0] == '\0') return false;
+    if (!cc.ark_enable) return false;
 
     // 签名需要可信时钟：RTC 兜底或 SNTP 校准后的时间都行，
     // 但 1970/2024 这类未初始化时间签出来必然 401，直接跳过等下轮
@@ -133,7 +137,7 @@ bool ark_quota_fetch(int remain[3])
     sha256_hex(ARK_BODY, strlen(ARK_BODY), body_hash);
 
     char auth[512];
-    v4_sign(x_date, body_hash, auth);
+    v4_sign(cc.ark_ak, cc.ark_sk, x_date, body_hash, auth);
 
     // ---- 发请求（证书 bundle 校验，与天气同款配置）----
     char url[160];

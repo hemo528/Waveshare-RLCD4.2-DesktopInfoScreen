@@ -230,12 +230,12 @@ def new_canvas():
 # ---------------- 场景渲染（坐标与 ui_desktop.cpp 一一对应） ----------------
 # 状态栏为全局层（所有页面共享）；页面内容画在页面容器区域（绝对 y = 页内 y + 24）
 def draw_statusbar(c, M, case):
-    wd = case['wday']
     b = grab(c, (2, 2, 164, 24))
-    draw_label(c, F_CN, case['date'] + ' 星期' + wd, 8, 4)
+    draw_label(c, F_CN, case['date'] + ' 星期' + case['wday'], 8, 4)
     M('screen', 'date', (2, 2, 164, 24), b)
+    text = '配网 192.168.4.1' if case.get('apmode') else 'WiFi ' + case['ip']
     b = grab(c, (164, 2, 326, 24))
-    draw_label(c, F_CN, 'WiFi ' + case['ip'], 164, 4)
+    draw_label(c, F_CN, text, 164, 4)
     M('screen', 'wifi', (164, 2, 326, 24), b)
     b = grab(c, (326, 2, 398, 24))
     draw_label(c, F_CN, '电量 ' + case['batt'], 326, 4)
@@ -251,14 +251,24 @@ def render(case, icon_name, frame=0):
 
     draw_statusbar(c, M, case)
 
+    # 配网模式：钟位显示 192.168.4.1（num_48），下方热点提示行，秒位隐藏
+    if case.get('apmode'):
+        b = grab(c, (2, 26, 398, 80))
+        draw_label(c, F_48, '192.168.4.1', 0, 30, width=400, align='center')
+        M('pageA', 'time', (2, 26, 398, 80), b)
+        b = grab(c, (0, 68, 400, 98))
+        draw_label(c, F_CN, '连接热点 DesktopInfoScreen 打开管理页', 0, 72, width=400, align='center')
+        M('pageA', 'ap_hint', (0, 68, 400, 98), b)
+
     # 页面1 内容（容器顶 y=24：以下绝对坐标 = 固件页内坐标 + 24）
     # 时钟区（星期行已去掉；64px 大钟）
-    b = grab(c, (100, 26, 300, 80))
-    draw_label(c, F_64, case['hm'], 0, 30, width=400, align='center')
-    M('pageA', 'time', (100, 26, 300, 80), b)
-    b = grab(c, (288, 54, 340, 78))
-    draw_label(c, F_28, case['ss'], 292, 58)
-    M('pageA', 'sec', (288, 54, 340, 78), b)
+    if not case.get('apmode'):
+        b = grab(c, (100, 26, 300, 80))
+        draw_label(c, F_64, case['hm'], 0, 30, width=400, align='center')
+        M('pageA', 'time', (100, 26, 300, 80), b)
+        b = grab(c, (288, 54, 340, 78))
+        draw_label(c, F_28, case['ss'], 292, 58)
+        M('pageA', 'sec', (288, 54, 340, 78), b)
 
     # 室内面板（固件 pad_all=0，子控件相对内容区=面板角+border(2)）
     draw_panel(c, 6, 102, 192, 100)
@@ -349,6 +359,11 @@ CASES = [
          ip='192.168.100.82', batt='87%', in_t='24.5C', in_h='56%',
          city='南京', upd='更新 14:30', wx_t='31C', wx_cond='小雨·湿78%',
          qname=('5小时', '7天', '30天'), q=(23, 41, 12)),
+    # 配网模式：未配置/连接失败时，钟位显示管理地址，秒位隐藏、热点提示行显示
+    dict(name='配网热点', date='09/05', wday='六', ip='--', batt='87%',
+         hm='192.168.4.1', ss='', sync='', apmode=True,
+         in_t='24.5C', in_h='56%', city='南京', upd='更新 --', wx_t='--C', wx_cond='无数据',
+         qname=('5小时', '7天', '30天'), q=(100, 100, 100)),
     dict(name='极值', date='12/25', wday='日', hm='23:59', ss='59', sync='RTC 时间',
          ip='192.168.100.123', batt='100%', in_t='-40.0C', in_h='100%',
          city='南京', upd='更新 23:45', wx_t='-3C', wx_cond='雷阵雨伴冰雹·湿100%',
@@ -359,8 +374,8 @@ CASES = [
          qname=('5小时', '7天', '30天'), q=(0, 0, 0)),
 ]
 
-COMBOS = [(0, 'rain_l', 0), (1, 'thunder', 1), (2, 'overcast', 0),
-          (3, 'overcast', 0), (4, 'overcast', 0), (5, 'overcast', 0)]
+COMBOS = [(0, 'rain_l', 0), (1, 'thunder', 1), (2, 'overcast', 0), (3, 'overcast', 0),
+          (4, 'overcast', 0), (5, 'overcast', 0), (6, 'overcast', 0)]
 
 # 页面2：日历场景（cal_first_wday=1号的星期 0=周日；cal_today=None 表示时钟未就绪的空日历）
 CAL_CASES = [

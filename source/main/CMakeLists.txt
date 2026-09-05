@@ -11,12 +11,16 @@ idf_component_register(
     "data/data_tasks.cpp"
     "quota/ark_quota.cpp"
     "key/key_bsp.cpp"
+    "config/config_store.cpp"
+    "web/web_server.cpp"
     INCLUDE_DIRS
     "."
     "./ui"
     "./data"
     "./quota"
     "./key"
+    "./config"
+    "./web"
     PRIV_REQUIRES
     rlcd_bsp
     rlcd_app
@@ -25,6 +29,7 @@ idf_component_register(
     esp_event
     esp_netif
     esp_http_client
+    esp_http_server
     esp-tls
     mbedtls
     json

@@ -25,6 +25,7 @@
 #include "i2c_equipment.h"
 #include "adc_bsp.h"
 #include "wifi_sta_bsp.h"
+#include "../config/config_store.h"   // 运行时配置（网页后台可改，NVS 持久化）
 #include "ark_quota.h"   // 火山方舟 Coding Plan 用量直查（V4 签名，quota/ 模块）
 #include "key_bsp.h"     // 板载按键扫描（页面切换）
 
@@ -221,8 +222,7 @@ static int wmo_icon(int code)
 
 // 文本关键词 → 图标（OpenWeather 英文 main 字段 / 和风中文 text 字段）。
 // 注意顺序：特异性强的词放前面（"雷阵雨"先于"雨"命中）。
-// 仅 OpenWeather / 和风数据源使用；Open-Meteo 走上面的 WMO 码直查表
-#if APP_WEATHER_PROVIDER != WEATHER_OPEN_METEO
+// OpenWeather / 和风数据源使用；Open-Meteo 走上面的 WMO 码直查表
 static int wx_icon_from_text(const char *s)
 {
     static const struct { const char *kw; int icon; } tab[] = {
@@ -242,17 +242,16 @@ static int wx_icon_from_text(const char *s)
     }
     return WX_ICON_OVERCAST;
 }
-#endif  // APP_WEATHER_PROVIDER != WEATHER_OPEN_METEO
 
-#if APP_WEATHER_PROVIDER == WEATHER_OPEN_METEO
-static bool fetch_weather(void)
+// 三个数据源的抓取实现（编译期全部纳入，运行时按 cfg.wx_provider 分发）
+static bool fetch_weather_openmeteo(const app_cfg_t *c)
 {
     char url[256];
     snprintf(url, sizeof(url),
              "https://api.open-meteo.com/v1/forecast"
              "?latitude=%s&longitude=%s"
              "&current=temperature_2m,relative_humidity_2m,weather_code&timezone=auto",
-             APP_WEATHER_LAT, APP_WEATHER_LON);
+             c->wx_lat, c->wx_lon);
     std::string body;
     if (!http_get_text(url, body)) return false;
 
@@ -273,13 +272,13 @@ static bool fetch_weather(void)
     cJSON_Delete(root);
     return ok;
 }
-#elif APP_WEATHER_PROVIDER == WEATHER_OPENWEATHER
-static bool fetch_weather(void)
+
+static bool fetch_weather_owm(const app_cfg_t *c)
 {
     char url[256];
     snprintf(url, sizeof(url),
              "https://api.openweathermap.org/data/2.5/weather?q=%s&appid=%s&units=metric",
-             APP_WEATHER_OWM_CITY, APP_WEATHER_OWM_KEY);
+             c->wx_owm_city, c->wx_owm_key);
     std::string body;
     if (!http_get_text(url, body)) return false;
 
@@ -301,13 +300,13 @@ static bool fetch_weather(void)
     cJSON_Delete(root);
     return ok;
 }
-#elif APP_WEATHER_PROVIDER == WEATHER_QWEATHER
-static bool fetch_weather(void)
+
+static bool fetch_weather_qweather(const app_cfg_t *c)
 {
     char url[256];
     snprintf(url, sizeof(url),
              "https://devapi.qweather.com/v7/weather/now?location=%s&key=%s",
-             APP_WEATHER_QW_LOC, APP_WEATHER_QW_KEY);
+             c->wx_qw_loc, c->wx_qw_key);
     std::string body;
     if (!http_get_text(url, body)) return false;
 
@@ -328,10 +327,16 @@ static bool fetch_weather(void)
     cJSON_Delete(root);
     return ok;
 }
-#endif
 
-// 大模型用量的获取已独立为 quota/ark_quota.cpp（V4 签名直连火山 OpenAPI），
-// 这里只负责按周期调用并写进数据仓库。
+// 运行时数据源分发（网页后台切换 provider，无需重新编译）
+static bool fetch_weather(void)
+{
+    app_cfg_t c;
+    cfg_get_copy(&c);
+    if (c.wx_provider == WEATHER_OPENWEATHER) return fetch_weather_owm(&c);
+    if (c.wx_provider == WEATHER_QWEATHER)    return fetch_weather_qweather(&c);
+    return fetch_weather_openmeteo(&c);
+}
 
 static void net_task(void *arg)
 {
@@ -368,8 +373,7 @@ static void net_task(void *arg)
             }
         }
 
-        // ---- 大模型用量（成功按 10min 排期，失败 2min 重试；时钟未就绪会内部跳过） ----
-#if APP_ARK_ENABLE
+        // ---- 大模型用量（成功按 10min 排期，失败 2min 重试；未启用/时钟未就绪时内部快速跳过） ----
         if (now >= next_quota) {
             int remain[3];
             if (ark_quota_fetch(remain)) {
@@ -379,7 +383,6 @@ static void net_task(void *arg)
                 next_quota = now + APP_LLM_QUOTA_RETRY_S;
             }
         }
-#endif
 
         vTaskDelay(pdMS_TO_TICKS(10 * 1000));   // 调度粒度 10s（两个周期都是分钟级，足够）
     }
@@ -404,11 +407,14 @@ void data_tasks_start(void)
     Adc_PortInit();
     data_set_battery((int)Adc_GetBatteryLevel());
 
-    // 手动配置的大模型用量作为初始值
-    data_set_quota(APP_LLM_QUOTA_5H_PCT, APP_LLM_QUOTA_7D_PCT, APP_LLM_QUOTA_30D_PCT, "cfg");
+    // 兜底额度与城市名来自运行时配置（NVS 优先，宏默认兜底）
+    app_cfg_t c;
+    cfg_get_copy(&c);
+    data_set_quota(c.quota_fb[0], c.quota_fb[1], c.quota_fb[2], "cfg");
 
     data_lock();
-    snprintf(g_data.wx_city, sizeof(g_data.wx_city), "%s", APP_WEATHER_CITY);
+    snprintf(g_data.wx_city, sizeof(g_data.wx_city), "%.*s",
+             (int)sizeof(g_data.wx_city) - 1, c.wx_city);
     data_unlock();
 
     xTaskCreatePinnedToCore(sensor_task, "sensor", 4 * 1024, NULL, 3, NULL, 1);

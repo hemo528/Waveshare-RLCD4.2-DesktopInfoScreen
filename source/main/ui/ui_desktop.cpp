@@ -76,8 +76,10 @@ struct ui_objects_t {
     lv_obj_t *page[PAGE_N];
     int       cur_page = 0;
     // 页面1：时钟区
-    lv_obj_t *lbl_time;   // HH:MM（num_64 粗体，星期行已去掉——状态栏有了）
-    lv_obj_t *lbl_sec;    // SS（num_28，基线对齐主时钟）
+    lv_obj_t *lbl_time;   // HH:MM（num_64 粗体；配网模式下改显示 192.168.4.1 并切 num_48）
+    lv_obj_t *lbl_sec;    // SS（num_28，基线对齐主时钟；配网模式隐藏）
+    lv_obj_t *lbl_ap_hint;// "连接热点 … 打开管理页"（仅配网模式显示）
+    bool      ap_shown = false;   // 当前是否处于配网显示（切换时钟字体用，避免每秒重设）
     // 页面1：中部面板
     lv_obj_t *lbl_in_title;
     lv_obj_t *lbl_in_temp;
@@ -277,7 +279,11 @@ void ui_tick(lv_timer_t *timer)
     strftime(buf, sizeof(buf), "%m/%d", &tmv);
     snprintf(buf2, sizeof(buf2), "%s 星期%s", buf, wd);
     lv_label_set_text(u.lbl_date, buf2);
-    snprintf(buf, sizeof(buf), "WiFi %s", wifi_sta_ip_str());
+    if (wifi_ap_active()) {
+        snprintf(buf, sizeof(buf), "配网 192.168.4.1");
+    } else {
+        snprintf(buf, sizeof(buf), "WiFi %s", wifi_sta_ip_str());
+    }
     lv_label_set_text(u.lbl_wifi, buf);
     if (batt >= 0) {
         snprintf(buf, sizeof(buf), "电量 %d%%", batt);
@@ -286,11 +292,27 @@ void ui_tick(lv_timer_t *timer)
     }
     lv_label_set_text(u.lbl_batt, buf);
 
-    // 页面1：时钟区（num_64 粗体数字；秒位槽与居中主时钟右缘保持 8px 间隙）
-    strftime(buf, sizeof(buf), "%H:%M", &tmv);
-    lv_label_set_text(u.lbl_time, buf);
-    strftime(buf, sizeof(buf), "%S", &tmv);
-    lv_label_set_text(u.lbl_sec, buf);
+    // 页面1：时钟区（num_64 粗体数字；配网模式下钟位显示 192.168.4.1，秒位隐藏）
+    if (wifi_ap_active()) {
+        if (!u.ap_shown) {   // 进入配网显示：切字体 + 显隐标签（只在模式变化时做一次）
+            u.ap_shown = true;
+            lv_obj_set_style_text_font(u.lbl_time, F_N48, 0);
+            lv_obj_add_flag(u.lbl_sec, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(u.lbl_ap_hint, LV_OBJ_FLAG_HIDDEN);
+        }
+        lv_label_set_text(u.lbl_time, "192.168.4.1");
+    } else {
+        if (u.ap_shown) {    // 回到正常显示
+            u.ap_shown = false;
+            lv_obj_set_style_text_font(u.lbl_time, F_N64, 0);
+            lv_obj_clear_flag(u.lbl_sec, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(u.lbl_ap_hint, LV_OBJ_FLAG_HIDDEN);
+        }
+        strftime(buf, sizeof(buf), "%H:%M", &tmv);
+        lv_label_set_text(u.lbl_time, buf);
+        strftime(buf, sizeof(buf), "%S", &tmv);
+        lv_label_set_text(u.lbl_sec, buf);
+    }
 
     // 页面1：室内面板（数值用 num_28 粗体；湿度不带 RH 后缀——"100%RH"在 28px 下宽约 110px
     // 会穿出面板内缘，仿真器实测；单位由 C/% 区分即可）
@@ -369,6 +391,11 @@ void ui_desktop_create(void)
     lv_obj_set_width(u.lbl_time, 400);
     lv_obj_set_style_text_align(u.lbl_time, LV_TEXT_ALIGN_CENTER, 0);
     u.lbl_sec  = make_label(u.page[0], F_N28, 292, 58, "--");
+    u.lbl_ap_hint = make_label(u.page[0], F_CN, 0, 72, "");
+    lv_obj_set_width(u.lbl_ap_hint, 400);
+    lv_obj_set_style_text_align(u.lbl_ap_hint, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_text(u.lbl_ap_hint, "连接热点 " APP_SETUP_AP_SSID " 打开管理页");
+    lv_obj_add_flag(u.lbl_ap_hint, LV_OBJ_FLAG_HIDDEN);
 
     // ===== 页面1：中部两面板（页面内 y 102..202） =====
     lv_obj_t *p_in = make_panel(u.page[0], 6, 102, 192, 100);

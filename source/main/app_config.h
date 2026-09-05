@@ -3,10 +3,18 @@
 #pragma once
 
 // ---------------- Wi-Fi ----------------
-// 注意：ESP32-S3 只支持 2.4GHz！若这个 "_5G" SSID 是路由器的 5GHz 频段，
-// 板子搜不到它——请确认路由器把 2.4G 与 5G 合并为同名，或改用 2.4G 的 SSID。
+// 注意：以下两个宏只是**首次默认值**——网页后台保存过的配置存在 NVS 里，
+// 每次上电优先生效；NVS 为空（首次烧录/清除配置）时才回落到这里。
+// 模板发布版留空/占位：首次开机 WiFi 连不上会自动进入配网热点模式，
+// 连接热点后浏览器访问 192.168.4.1 即可在线配置，无需重新编译。
 #define APP_WIFI_SSID       "你的WiFi名称"      // WiFi 名称（2.4GHz，UTF-8 共 20 字节 < 32 上限）
 #define APP_WIFI_PASSWORD   "你的WiFi密码"            // WiFi 密码
+
+// ---------------- 配网热点（未配置 / WiFi 连接失败 45s 后自动开启） ----------------
+// 连上热点后浏览器访问 192.168.4.1 进入管理后台；密码留空 "" = 开放网络
+#define APP_SETUP_AP_SSID   "DesktopInfoScreen"   // 配网热点名
+#define APP_SETUP_AP_PASS   "123456789"           // 配网热点密码（8 位以上；WPA2）
+#define APP_SETUP_STA_TIMEOUT_S  45               // STA 等待 IP 的超时（超时回退热点）
 
 // ---------------- 时间 ----------------
 #define APP_NTP_SERVER_1    "ntp.aliyun.com"      // 国内优先阿里 NTP
