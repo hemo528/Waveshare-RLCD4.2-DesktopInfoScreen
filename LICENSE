@@ -1,0 +1,44 @@
+DesktopInfoScreen for Waveshare ESP32-S3-RLCD-4.2
+Copyright (c) 2026 hemo528
+
+================================================================================
+一、中文许可（如中英文有歧义，以中文为准）
+================================================================================
+
+1. 本项目（包括源代码、固件、文档与图形资源）仅供**个人学习、研究与自用**。
+   允许为自用目的进行修改、编译与烧录。
+
+2. **严格禁止任何形式的商业使用**，包括但不限于：
+   - 直接或间接出售、出租、许可本项目的任何部分；
+   - 将本项目全部或部分捆绑、集成到商业产品、付费服务或收费内容中；
+   - 以盈利为目的的部署、展示、广告或商业宣传；
+   - 将本项目或其衍生作品用于任何商业机构的内部生产环境。
+
+3. 任何再分发（无论是否修改）必须：
+   - 保留本许可声明与原仓库链接；
+   - 明确署名原作者；
+   - 以相同的"禁止商用"条件向下游授予许可（不得放宽）。
+
+4. 需要任何形式的商用授权，必须事先获得作者的**书面许可**。
+
+5. 本项目按"现状"提供，不附带任何明示或默示的担保。作者不对因使用、
+   修改或分发本项目而产生的任何直接或间接损失承担责任。
+
+================================================================================
+二、English Summary
+================================================================================
+
+This project (source code, firmware, documentation and assets) is provided for
+PERSONAL, EDUCATIONAL AND RESEARCH USE ONLY.
+
+ANY COMMERCIAL USE IS STRICTLY PROHIBITED without prior written permission from
+the author, including but not limited to: selling, sublicensing, bundling with
+paid products or services, profitable deployment, or use within commercial
+production environments.
+
+Any redistribution, with or without modification, must retain this notice,
+credit the original repository and author, and be licensed under the same
+non-commercial terms.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. THE AUTHOR
+SHALL NOT BE LIABLE FOR ANY DAMAGES ARISING FROM ITS USE.

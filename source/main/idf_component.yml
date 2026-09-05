@@ -1,0 +1,4 @@
+## IDF Component Manager Manifest
+dependencies:
+  idf: ">=5.5.0"
+  lvgl/lvgl: "~8.4.0"   # 与微雪官方例程同版本系列；v9 API 不兼容，勿升级到 9.x
